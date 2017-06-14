@@ -8,9 +8,17 @@ machine:
 dependencies:
   pre: 
     - pip install -r requirements.txt
+database:
+    override:
+    - createdb thesis-jwt-auth
+    - createdb thesis-jwt-auth-test
+    - python manage.py create_db
+    - python manage.py db init
+    - python manage.py db migrate
+
 test:
   override:
     - mkdir -p $CIRCLE_ARTIFACTS
     - python manage.py cov
-    - mv tmp/coverage/ $CIRCLE_ARTIFACTS
+    - mv tmp/coverage/ $CIRCLE_ARTIFACTS/
 

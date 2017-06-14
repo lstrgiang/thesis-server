@@ -22,8 +22,10 @@ migrate = Migrate(app, db)
 manager = Manager(app)
 # migrations
 manager.add_command('db', MigrateCommand)
-@manager.option('-h', '--host', dest='host', default='127.0.0.1')
-@manager.option('-p', '--port', dest='port', type=int, default=6969)
+port = int(os.environ.get("PORT", 5000))
+host = '0.0.0.0'
+@manager.option('-h', '--host', dest='host', default=host)
+@manager.option('-p', '--port', dest='port', type=int, default=port)
 @manager.option('-w', '--workers', dest='workers', type=int, default=3)
 def gunicorn(host, port, workers):
     """Start the Server with Gunicorn"""

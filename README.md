@@ -4,6 +4,8 @@
 
 1. Activate a virtualenv
 1. Install the requirements
+1. Setup database
+1. Run server
 
 ### Set Environment Variables
 

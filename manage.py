@@ -1,9 +1,7 @@
 # manage.py
 
 
-import os
-import unittest
-import coverage
+import os, unittest, coverage
 
 from flask_script import Manager
 from flask_migrate import Migrate, MigrateCommand
@@ -20,13 +18,29 @@ COV = coverage.coverage(
 COV.start()
 
 from project.server import app, db, models
-
-
 migrate = Migrate(app, db)
 manager = Manager(app)
-
 # migrations
 manager.add_command('db', MigrateCommand)
+@manager.option('-h', '--host', dest='host', default='127.0.0.1')
+@manager.option('-p', '--port', dest='port', type=int, default=6969)
+@manager.option('-w', '--workers', dest='workers', type=int, default=3)
+def gunicorn(host, port, workers):
+    """Start the Server with Gunicorn"""
+    from gunicorn.app.base import Application
+
+    class FlaskApplication(Application):
+        def init(self, parser, opts, args):
+            return {
+                'bind': '{0}:{1}'.format(host, port),
+                'workers': workers
+            }
+
+        def load(self):
+            return app
+
+    application = FlaskApplication()
+    return application.run()
 
 
 @manager.command
@@ -68,7 +82,6 @@ def create_db():
 def drop_db():
     """Drops the db tables."""
     db.drop_all()
-
-
 if __name__ == '__main__':
+
     manager.run()

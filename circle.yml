@@ -18,6 +18,9 @@ database:
 test:
   override:
     - mkdir -p $CIRCLE_ARTIFACTS
+    - mkdir -p $CIRCLE_TEST_REPORTS/junit/
     - python manage.py cov
+    - nosetests --with-xunit
+    - mv nosetests.xml $CIRCLE_TEST_REPORTS/junit/junit.xml
     - mv tmp/coverage/ $CIRCLE_ARTIFACTS/
 

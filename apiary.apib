@@ -1,0 +1,75 @@
+FORMAT: 1A
+HOST: https://scloud-server.herokuapp.com/
+
+# Polls API
+
+Polls is a simple API allowing consumers to view polls and vote in them.
+
+## Registration API [/auth/register]
+Register new account with provided information and return authorized access token.
+### Register API [POST]
++ Request (application/json)
+
+        {
+            "email": "testing@gmail.com",
+            "password": "12345678",
+            "birthday": "20/07/2017",
+            "fullname": "Scloud User",
+            "job": "Software Engineer",
+            "country": "Vietnam"
+        }
+        
++ Response 200 (application/json)
+
+        {
+            "status": "success",
+            "message": "Successfully registered."
+            "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+        }
+        
++ Response 401 (application/json)
+
+        {
+            "status": "fail",
+            "message": "Some error occurred. Please try again."
+        }
+        
++ Response 202 (application/json)
+
+        {
+            "status": "fail",
+            "message": "User already exists. Please Log in."
+        }
+
+## Login API [/auth/login]
+Login with created user account and return the authorized access token
+### Login [POST]
+
++ Request (application/json)
+
+        {
+            "email": "testing@gmail.com",
+            "password": "12345678"
+        }
+
++ Response 200 (application/json)
+        
+        {
+            "status": "success",
+            "message": "Successfully login.",
+            "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+        }
+        
++ Response 404 (application/json)
+
+        {
+            "status": "fail",
+            "message": "User does not exist.",
+        }
+        
++ Response 500 (application/json)
+
+        {
+            "status": "fail",
+            "message": "Try again",
+        }

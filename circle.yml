@@ -9,10 +9,11 @@ dependencies:
 
 database:
     override:
+    - dropdb --if-exists thesis_jwt_auth
+    - dropdb --if-exists thesis_jwt_auth_test
     - createdb thesis_jwt_auth
     - createdb thesis_jwt_auth_test
     - python manage.py create_db
-    - python manage.py db upgrade
     - python manage.py db migrate
 
 test:

@@ -11,6 +11,7 @@ database:
     override:
     - createdb thesis_jwt_auth
     - createdb thesis_jwt_auth_test
+    - python manage.py create_db
     - python manage.py db upgrade
     - python manage.py db migrate
 

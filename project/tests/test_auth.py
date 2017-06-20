@@ -3,62 +3,17 @@ import json
 # import time
 from flask_api import status
 from project.server import db
-from project.server.models import User, BlacklistToken
+from project.server.models import  BlacklistToken
 from project.tests.base import BaseTestCase
-
+from project.tests.helpers import DatabasePrepare, PostHTTP
 class TestAuthBlueprint(BaseTestCase):
-    def testing_json_data(self):
-        return json.dumps(dict(
-            email='giang@gmail.com',
-            password='123456'
-        ))
-    def header_token(self,token):
-        """
-        Generate header with token
-        """
-        return dict(Authorization='Bearer '+json.loads(token)['auth_token'])
-    def get_with_token(self,url,token,json_data=None):
-        """
-        GET request with authorized token
-        """
-        return self.client.get(url,
-            data=json_data,
-            headers=self.header_token(token))
-    def post_with_token(self,url,token,json_data=None):
-        """
-        POST with authorized token
-        """
-        return self.client.post(url,
-            headers=self.header_token(token),
-            data=json_data,
-            content_type='application/json'
-        )
-    def post_without_token(self,url,json_data=None):
-        return self.client.post(url,
-            data=json_data,
-            content_type='application/json'
-        )
-    def get_without_token(self,url,json_data=None):
-        return self.client.post(url,
-            data=json_data,
-            content_type='application/json'
-        )
-    def login_success(self):
-        return self.post_without_token('/auth/login',
-            self.testing_json_data())
 
-    def register_success(self):
-        """
-        Perform user registration before testing
-        """
-        return self.post_without_token('/auth/register',
-            self.testing_json_data())
     def test_registration(self):
         """
         Test the user registration
         """
         with self.client:
-            response = self.register_success();
+            response = PostHTTP.register_success(self.client);
             data = json.loads(response.data.decode())
             self.assertTrue(data['status'] == 'success')
             self.assertTrue(data['message']=='Successfully registered.')
@@ -67,14 +22,9 @@ class TestAuthBlueprint(BaseTestCase):
             self.assertEqual(response.status_code,status.HTTP_201_CREATED)
     def test_registered_with_already_registered_user(self):
         """ Test registration with already registered email"""
-        user = User(
-            email='giang@gmail.com',
-            password='test'
-        )
-        db.session.add(user)
-        db.session.commit()
+        DatabasePrepare.create_new_user()
         with self.client:
-            response = self.register_success()
+            response = PostHTTP.register_success(self.client)
             data = json.loads(response.data.decode())
             self.assertTrue(data['status'] == 'fail')
             self.assertTrue(
@@ -85,7 +35,7 @@ class TestAuthBlueprint(BaseTestCase):
         """ Test for login of registered-user login """
         with self.client:
             # Register new user
-            resp_register = self.register_success()
+            resp_register = PostHTTP.register_success(self.client)
             data_register = json.loads(resp_register.data.decode())
             self.assertTrue(data_register['status'] == 'success')
             self.assertTrue(
@@ -95,7 +45,7 @@ class TestAuthBlueprint(BaseTestCase):
             self.assertTrue(resp_register.content_type == 'application/json')
             self.assertEqual(resp_register.status_code, status.HTTP_201_CREATED)
             # Login with registered user
-            response = self.login_success()
+            response = PostHTTP.login_success(self.client)
             data = json.loads(response.data.decode())
             self.assertTrue(data['status'] == 'success')
             self.assertTrue(data['message'] == 'Successfully logged in.')
@@ -118,31 +68,6 @@ class TestAuthBlueprint(BaseTestCase):
             self.assertTrue(data['message'] == 'User does not exist.')
             self.assertTrue(response.content_type == 'application/json')
             self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-    def test_user_status(self):
-        """ Test for user status """
-        with self.client:
-            resp_register = self.client.post(
-                '/auth/register',
-                data=json.dumps(dict(
-                    email='giang@gmail.com',
-                    password='123456'
-                )),
-                content_type='application/json'
-            )
-            response = self.client.get(
-                '/auth/status',
-                headers=dict(
-                    Authorization='Bearer ' + json.loads(
-                        resp_register.data.decode()
-                    )['auth_token']
-                )
-            )
-            data = json.loads(response.data.decode())
-            self.assertTrue(data['status'] == 'success')
-            self.assertTrue(data['data'] is not None)
-            self.assertTrue(data['data']['email'] == 'giang@gmail.com')
-            self.assertTrue(data['data']['admin'] is 'true' or 'false')
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
     def test_valid_logout(self):
         """ Test for logout before token expires """
         with self.client:
@@ -151,7 +76,11 @@ class TestAuthBlueprint(BaseTestCase):
                 '/auth/register',
                 data=json.dumps(dict(
                     email='giang@gmail.com',
-                    password='123456'
+                    password='123456',
+                    birthday='22/02/1995',
+                    fullname='le su truong giang',
+                    job=None,
+                    country=None
                 )),
                 content_type='application/json',
             )
@@ -194,7 +123,7 @@ class TestAuthBlueprint(BaseTestCase):
         # """ Testing logout after the token expires """
         # with self.client:
             # # user registration
-            # resp_register = self.register_success()
+            # resp_register = PostHTTP.register_success(self.client)
             # data_register = json.loads(resp_register.data.decode())
             # self.assertTrue(data_register['status'] == 'success')
             # self.assertTrue(
@@ -203,7 +132,7 @@ class TestAuthBlueprint(BaseTestCase):
             # self.assertTrue(resp_register.content_type == 'application/json')
             # self.assertEqual(resp_register.status_code, status.HTTP_201_CREATED)
             # # user login
-            # resp_login = self.login_success()
+            # resp_login = PostHTTP.login_success(self.client)
             # data_login = json.loads(resp_login.data.decode())
             # self.assertTrue(data_login['status'] == 'success')
             # self.assertTrue(data_login['message'] == 'Successfully logged in.')
@@ -229,7 +158,7 @@ class TestAuthBlueprint(BaseTestCase):
         """ Test for logout after a valid token gets blacklisted """
         with self.client:
             # user registration
-            resp_register = self.register_success()
+            resp_register = PostHTTP.register_success(self.client)
             data_register = json.loads(resp_register.data.decode())
             self.assertTrue(data_register['status'] == 'success')
             self.assertTrue(
@@ -238,7 +167,7 @@ class TestAuthBlueprint(BaseTestCase):
             self.assertTrue(resp_register.content_type == 'application/json')
             self.assertEqual(resp_register.status_code, status.HTTP_201_CREATED)
             # user login
-            resp_login = self.login_success()
+            resp_login = PostHTTP.login_success(self.client)
             data_login = json.loads(resp_login.data.decode())
             self.assertTrue(data_login['status'] == 'success')
             self.assertTrue(data_login['message'] == 'Successfully logged in.')
@@ -251,7 +180,7 @@ class TestAuthBlueprint(BaseTestCase):
             db.session.add(blacklist_token)
             db.session.commit()
             # blacklisted valid token logout
-            response = self.post_with_token('/auth/logout',
+            response = PostHTTP.post_with_token(self.client,'/auth/logout',
                 resp_login.data.decode())
             data = json.loads(response.data.decode())
             self.assertTrue(data['status'] == 'fail')
@@ -260,56 +189,17 @@ class TestAuthBlueprint(BaseTestCase):
     def test_valid_blacklisted_token_user(self):
         """ Test for user status with a blacklisted valid token """
         with self.client:
-            resp_register = self.register_success()
+            resp_register = PostHTTP.register_success(self.client)
             # blacklist a valid token
             blacklist_token = BlacklistToken(
                 token=json.loads(resp_register.data.decode())['auth_token'])
             db.session.add(blacklist_token)
             db.session.commit()
-            response = self.get_with_token('/auth/status',
+            response = PostHTTP.post_with_token(self.client,'/auth/status',
                     resp_register.data.decode())
             data = json.loads(response.data.decode())
             self.assertTrue(data['status'] == 'fail')
             self.assertTrue(data['message'] == 'Token is blacklisted. Please login again.')
             self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-    def test_valid_get_empty_encrypted_key(self):
-        with self.client:
-            resp_register = self.register_success()
-            response = self.get_with_token('/auth/key',
-                   resp_register.data.decode())
-            data = json.loads(response.data.decode())
-            self.assertTrue(data['status'] == 'success')
-            self.assertFalse(data['data']['encrypted_key'])
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-    def test_valid_post_encrypted_key(self):
-        with self.client:
-            resp_register = self.register_success()
-            print(resp_register.data)
-            json_data = json.dumps(dict(encrypted_key='example_token'))
-            response = self.post_with_token('/auth/key',
-                    resp_register.data.decode(),
-                    json_data)
-            data = json.loads(response.data.decode())
-            self.assertTrue(data['status'] == 'success')
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            response = self.get_with_token('/auth/key',
-                    resp_register.data.decode())
-            data = json.loads(response.data.decode())
-            self.assertTrue(data['status'] == 'success')
-            self.assertEqual(data['data']['encrypted_key'],'example_token')
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-    def test_post_existed_encrypted_key(self):
-        with self.client:
-            resp_register = self.register_success()
-            json_data = json.dumps(dict(encrypted_key='example_token'))
-            response = self.post_with_token('/auth/key',
-                    resp_register.data.decode(),
-                    json_data)
-            json_data = json.dumps(dict(encrypted_key='change_token'))
-            response = self.post_with_token('/auth/key',
-                    resp_register.data.decode(),
-                    json_data)
-            data = json.loads(response.data.decode())
-            self.assertEqual(data['status'], 'fail')
 if __name__=='__main__':
     unittest.main()

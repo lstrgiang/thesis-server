@@ -49,7 +49,8 @@ Login with created user account and return the authorized access token
 
         {
             "email": "testing@gmail.com",
-            "password": "12345678"
+            "password": "12345678",
+            "mac_address": "12:32:45:5F:3C:12"
         }
 
 + Response 200 (application/json)
@@ -73,3 +74,46 @@ Login with created user account and return the authorized access token
             "status": "fail",
             "message": "Try again",
         }
+        
+## Key Registration API [/key/root]
+Register the device as root and add new keys
+### Key Register [POST]
+
++ Request (application/json)
+    
+    + Headers
+
+            Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+
+    + Body
+    
+            {
+                "mac_address": "32:23:43:4F:2S:5D",
+                "os": "macOS Sierra",
+                "backup_key": "adsfasdf123",
+                "modulus": "123123123124123",
+                "exponent": "adfasdfasdf123123",
+                "encrypted_modulus": "123123asdf123",
+                "encrypted_exponent": "asdfasdf123123"
+            }
+
++ Response 200 (application/json)
+
+            {
+                "status": "success",
+                "message": "You are able to encrypt your file now"
+            }
+            
++ Response 404 (application/json)
+
+            {
+                "status": "fail",
+                "message": "User does not exist."
+            }
+            
++ Response 202 (application/json)
+
+            {
+                "status": "fail",
+                "message":  "The account already registered a root device"
+            }

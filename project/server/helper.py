@@ -1,5 +1,78 @@
 from flask import  make_response, jsonify
 from flask_api import status
+from project.server import app
+from Crypto import Random
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP, AES
+from project.server import db
+from project.server.models import DeviceList, User, RSAPair
+import pyotp,base64, hashlib, os, ast
+class OTP:
+    @staticmethod
+    def get_new_code(secret):
+        return pyotp.TOTP(base64.b32encode(secret.encode('ascii'))).now()
+    @staticmethod
+    def verify(secret, code):
+        """
+        valid_window = 2 by default (2*30s = 60s = 1mins)
+        """
+        totp = pyotp.TOTP(base64.b32encode(secret.encode('ascii')))
+        return totp.verify(code,valid_window=2)
+
+
+class DatabaseCheck:
+    @staticmethod
+    def is_root_by_mac(mac_address):
+        """
+        Check if the MAC address is belong to a root device
+        :params:
+            :mac_address: MAC address that need to be checked
+        :returns:
+            True if it is the root device else False
+        """
+        device_list = DeviceList.get_device_by_mac(mac_address)
+        if device_list and device_list.root:
+            return True
+        return False
+    @staticmethod
+    def is_mac_address_existed(mac_address):
+        """
+        Check if the MAC address is existed in the database
+        :params: :mac_address: MAC address that need to be checked
+        :returns: True or False
+        """
+        device_list = DeviceList.get_device_by_mac(mac_address)
+        if device_list :
+            return True
+        return False
+    @staticmethod
+    def prepare_auth_token(user_id,mac_address,main_key=None):
+        """
+        Prepare params for generating authentication token
+        :params:
+            :user_id: the unique id of the user
+            :mac_address: MAC address of the device
+            :main_key: (None) main encrypted key
+        :returns: auth_token
+        """
+        while True:
+            private_key = KeyOperation.generate_new_pair()
+            if not RSAPair.is_existed(private_key):
+                break
+        public_key = private_key.publickey()
+        auth_token = User.encode_auth_token(user_id,
+            int(public_key.e),int(public_key.n),main_key)
+        DatabaseCheck.store_new_key_pairs(private_key)
+        return auth_token
+    @staticmethod
+    def store_new_key_pairs(private_key):
+        public_key = private_key.publickey()
+        key = RSAPair(str(public_key.n), int(public_key.e),
+            str(private_key.n))
+        db.session.add(key)
+        db.session.commit()
+
+
 class RequestUtils:
     @staticmethod
     def get_access_token(request):
@@ -101,4 +174,160 @@ class CommonResponseObject:
         return CommonResponseObject.fail_response(
             message=resp,
             error_code=status.HTTP_401_UNAUTHORIZED)
+class KeyOperation:
+    @staticmethod
+    def re_encryption(server_key, client_key, encrypted_key):
+        """
+        Perform decryption with server_key and encryption with client_key
+        to return the encrypted_key to client
+        :params:
+            :server_key: list of modulus and exponent of server key
+            :client_key: list of modulus and exponent of client provided key
+            :encrypted_key: provided key by the root device
+        :returns: :new_encrypted_key:
+        """
+        key = RSAPair.get_RSA_by_public(server_key)
+        server_private = RSA.construct([int(key.public_modulus), int(key.public_exponent),
+            int(key.private_exponent)])
+        client_public = RSA.construct([int(client_key[0]),
+            int(client_key[1])])
+        return KeyOperation.encrypt(client_public,
+                KeyOperation.decrypt(server_private,encrypted_key))
+    @staticmethod
+    def encrypt(public_key, raw):
+        """
+        Perform encryption with provided public_key and raw data
+        :params:
+            :public_key: RSA public key object
+            :raw: raw data to be encrypted
+        :returns: :encrypted_data:
+        """
+        public_cipher = PKCS1_OAEP.new(public_key)
+        if isinstance(raw,str):
+            return public_cipher.encrypt(raw.encode())
+        else:
+            return public_cipher.encrypt(raw)
+    @staticmethod
+    def decrypt(private_key, encrypted):
+        """
+        Perform decryption with provided private_key and encrypted data
+        :params:
+            :private_key: RSA private key object
+            :encrypted: encrypted data
+        :returns: :raw: raw data
+        """
+        private_cipher = PKCS1_OAEP.new(private_key)
+        return private_cipher.decrypt(ast.literal_eval(str(encrypted))).decode()
+
+    @staticmethod
+    def convert_to_32(data):
+        """
+        Convert data to 32base data
+        :params: :data:
+        :returns: :32base data:
+        """
+        return data + (32 - len(data) % 32) * chr(32 - len(data) % 32)
+    @staticmethod
+    def aes_random_encrypt(raw):
+        """
+        Encrypt the raw bit with AES and randomly generated key
+        """
+        key = os.urandom(128)[:15]
+        return KeyOperation.aes_encrypt(raw,key), key
+    @staticmethod
+    def aes_encrypt(raw, key):
+        """
+        Encrypt the raw bit with AES and provided key
+        :params:
+            :raw: raw list of bit or string
+            :key: key of encryption
+        :returns: :encrypted_raw:
+        """
+        raw = KeyOperation.convert_to_32(raw) #Convert raw to 32based raw
+        key = hashlib.sha256(key.encode()).digest() #hash the key with SHA256
+        iv = Random.new().read(AES.block_size) #Generate randomly iv key
+        cipher = AES.new(key, AES.MODE_CBC, iv) #Create cipher from key
+        return base64.b64encode(iv + cipher.encrypt(raw)) #Encrypt the key
+    @staticmethod
+    def aes_decrypt(encrypted , key):
+        """
+        Decrypt the encrypted with AES and key
+        :params:
+            :encrypted: data need to be decrypted
+            :key: encryption key
+        :returns: :raw:
+        """
+        encrypted = base64.b64decode(encrypted) #convert to byte
+        iv = encrypted[:AES.block_size] #generate iv from the encrypted
+        cipher = AES.new(key, AES.MODE_CBC, iv) #Create cipher from key
+        return KeyOperation.convert_to_32(( #decryption
+            cipher.decrypt(encrypted[AES.block_size:])).decode('utf-8'))
+
+    @staticmethod
+    def encrypt_OTP(device):
+        """
+        Generate an OTP code and encrypt it with public key associated
+        with provided device
+        :params:
+            :device: device entity of the root device
+        :returns:
+            :encrypted_key: encrypted OTP code
+        """
+        otp_modulus = device.otp_modulus #get the modulus of the public key
+        otp_exponent = device.otp_exponent #get the exponent of the public key
+        #construct public key from retrieved e,n
+        public_key = KeyOperation.construct_key(int(otp_modulus),int(otp_exponent))
+        #Generate an OTP code with the secret key
+        code= OTP.get_new_code(app.config['SECRET_KEY'])
+        rsa_key = PKCS1_OAEP.new(public_key)#create cipher from the public key
+        encrypted_key = rsa_key.encrypt(code.encode())#encrypt the code with the cipher
+        return encrypted_key #return the key
+
+    @staticmethod
+    def generate_new_pair():
+        """
+        Generate RSA Key pair with default exponent = 65547
+        """
+        return RSA.generate(1024)
+    @staticmethod
+    def construct_key(modulus, exponent, private_exponent = None):
+        """
+        Construct a key from provided modulus and exponent, give
+        a private modulus to generate the private key object
+        :params:
+            :modulus: public modulus of the key
+            :exponent: public exponent of the key
+            :private_exponent: private modulus of the private key
+        :return: RSA Key object
+        """
+        if private_exponent:
+            return RSA.construct([modulus,exponent,private_exponent])
+        return RSA.construct([modulus,exponent])
+    @staticmethod
+    def import_key(public_key):
+        return RSA.importKey(public_key)
+    @staticmethod
+    def is_valid(public_key):
+        """
+        Check if a public_key is valid
+        :params:
+            :public_key: the list or public key object
+        :returns: True or False or exception message
+        """
+        if isinstance(public_key,list): #if the parameter is a list
+            try: #try to construct the key
+                RSA.construct(public_key)
+                return True
+            except Exception as e:
+                return e
+        else: #if the parameter is a RSA Key object
+            try:
+                RSA.importKey(public_key) #import that key directly
+                return True
+            except Exception as e:
+                return e
+    @staticmethod
+    def authorize_new_device(user, mac_address, key):
+        private_key = RSA.construct([key.key_mod,key.key_ex])
+        return private_key
 

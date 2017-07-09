@@ -2,8 +2,8 @@ from flask import Blueprint, request
 from flask.views import MethodView
 from flask_api import status
 from project.server import bcrypt, db
-from project.server.models import User, BlacklistToken
-from project.server.helper import CommonResponseObject, RequestUtils
+from project.server.models import User, BlacklistToken, DeviceList
+from project.server.helper import CommonResponseObject, RequestUtils,DatabaseCheck
 import datetime
 auth_blueprint = Blueprint('auth', __name__)
 
@@ -12,18 +12,33 @@ class RegisterAPI(MethodView):
     """
     User Registration Resource
     """
+    def __check_register_json_data(self,post_data):#Check for json data
+        try:
+            email = post_data.get('email')
+            password = post_data.get('password')
+            bday = post_data.get('birthday')
+            post_data.get('job')
+            fullname=post_data.get('fullname')
+            post_data.get('country')
+            if not email or not password or not bday or not fullname:
+                return CommonResponseObject.fail_response(
+                    'Missing email, password, birthday or fullname')
+        except Exception:
+            return CommonResponseObject.fail_response(
+                'JSON data missing required fields')
 
     def post(self):
         # get the post data
         post_data = request.get_json()
+        self.__check_register_json_data(post_data)
         # check if user already exists
-        user = User.query.filter_by(email=post_data.get('email')).first()
+        user = User.get_user_by_email(post_data.get('email'))
         if user:
-            # return response to inform that user already existed
+                # return response to inform that user already existed
             return CommonResponseObject.register_user_exist()
         # if user does not exist, try to create new user and store to the database
-        try:
             # initialize new user object with information from the request
+        try:
             user = User(
                 email=post_data.get('email'),
                 password=post_data.get('password'),
@@ -36,7 +51,7 @@ class RegisterAPI(MethodView):
             db.session.add(user)
             db.session.commit()
             # generate the auth token
-            auth_token = user.encode_auth_token(user.id)
+            auth_token = User.encode_auth_token(user.id)
             # return response with auth token
             return CommonResponseObject.register_success(auth_token)
         except Exception as e:
@@ -52,9 +67,12 @@ class LoginAPI(MethodView):
         post_data = request.get_json()
         try:
             # fetch the user data
-            user = User.query.filter_by(email=post_data.get('email')).first()
+            user = User.get_user_by_email(post_data.get('email'))
+            mac= post_data.get('mac_address')
             if user and bcrypt.check_password_hash(user.password, post_data.get('password')):
-                auth_token = user.encode_auth_token(user.id)
+                device = DeviceList.get_device_by_user_id_and_mac(user.id,mac)
+                auth_token = DatabaseCheck.prepare_auth_token(user.id, mac ,
+                        None if not device else device.encrypted_key)
                 if auth_token:
                     return CommonResponseObject.login_success(auth_token)
             else:
@@ -97,57 +115,6 @@ class TokenStatusAPI(MethodView):
                         'Token is still available')
             return CommonResponseObject.fail_response(
                     message=resp,error_code=status.HTTP_401_UNAUTHORIZED)
-# class EncryptedKeyAPI(MethodView):
-    # """
-    # Store and retrieve the encrypted key that is associated with the user
-    # """
-    # def get(self):
-        # auth_header = request.headers.get('Authorization')
-        # if auth_header:
-            # auth_token = auth_header.split(" ")[1]
-        # else:
-            # auth_token= ''
-        # if auth_token:
-            # response = User.decode_auth_token(auth_token)
-            # if not isinstance(response, str):
-                # user = User.query.filter_by(id=response).first()
-                # responseObject = {
-                    # 'status': 'success',
-                    # 'data': {
-                        # 'encrypted_key': user.encrypted_key
-                    # }
-                # }
-                # return make_response(jsonify(responseObject)), status.HTTP_200_OK
-            # return CommonResponseObject.token_response(response)
-        # else:
-            # return CommonResponseObject.unauthorized_token_response()
-    # def post(self):
-        # auth_header = request.headers.get('Authorization')
-        # post_data = request.get_json()
-        # if auth_header:
-            # auth_token = auth_header.split(" ")[1]
-        # else:
-            # auth_token = ''
-        # if auth_token:
-            # response = User.decode_auth_token(auth_token)
-            # if not isinstance(response,str):
-                # user = User.query.filter_by(id=response).first()
-                # if user.encrypted_key == None:
-                    # user.encrypted_key = post_data.get('encrypted_key')
-                    # db.session.commit()
-                    # responseObject = {
-                        # 'status': 'success',
-                        # 'message': 'Encrypted Key stored successfully'
-                    # }
-                    # return make_response(jsonify(responseObject)),status.HTTP_200_OK
-                # else:
-                    # responseObject = {
-                        # 'status': 'fail',
-                        # 'message': 'User is already assigned with a key'
-                    # }
-                    # return make_response(jsonify(responseObject)), status.HTTP_400_BAD_REQUEST
-            # else:
-                # return CommonResponseObject.unauthorized_token_response()
 def BackupKeyAPI(MethodView):
     """
     Manage backup key for backing up the authorization key

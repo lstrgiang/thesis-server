@@ -3,7 +3,7 @@ import json
 # import time
 from flask_api import status
 from project.server import db
-from project.server.models import  BlacklistToken
+from project.server.models import  BlacklistToken, User
 from project.tests.base import BaseTestCase
 from project.tests.helpers import DatabasePrepare, PostHTTP
 class TestAuthBlueprint(BaseTestCase):
@@ -52,6 +52,18 @@ class TestAuthBlueprint(BaseTestCase):
             self.assertTrue(data['auth_token'])
             self.assertTrue(response.content_type == 'application/json')
             self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_registered_user_login_with_encrypted_key(self):
+        """ Test for login function with registered user and encrypted key"""
+        with self.client:
+            DatabasePrepare.add_new_encrypted_key()
+            response = PostHTTP.login_success_with_mac(self.client)
+            data = json.loads(response.data.decode())
+            self.assertTrue(data['status'] == 'success')
+            self.assertTrue(data['message'] == 'Successfully logged in.')
+            self.assertTrue(data['auth_token'])
+            self.assertTrue(response.content_type == 'application/json')
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            modulus, exponent = User.decode_auth_key(data['auth_token'])
     def test_non_registered_user_login(self):
         """ Test for login of non-registered user """
         with self.client:

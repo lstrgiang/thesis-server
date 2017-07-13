@@ -30,6 +30,9 @@ class RegisterAPI(MethodView):
     def post(self):
         # get the post data
         post_data = request.get_json()
+        if post_data is None:
+            return CommonResponseObject.fail_response(
+                'Please provide required data',status.HTTP_505_PERMISSION_DENIED)
         self.__check_register_json_data(post_data)
         # check if user already exists
         user = User.get_user_by_email(post_data.get('email'))
@@ -65,6 +68,9 @@ class LoginAPI(MethodView):
     def post(self):
         # get the post data
         post_data = request.get_json()
+        if post_data is None:
+            return CommonResponseObject.fail_response(
+                'Please provide required data',status.HTTP_505_PERMISSION_DENIED)
         try:
             # fetch the user data
             user = User.get_user_by_email(post_data.get('email'))

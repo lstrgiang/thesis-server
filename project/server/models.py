@@ -158,9 +158,9 @@ class RSAPair(db.Model):
     __tablename__= 'rsa_key'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    public_modulus= db.Column(db.String(512), nullable=False)
+    public_modulus= db.Column(db.String(), nullable=False)
     public_exponent= db.Column(db.Integer, nullable=False)
-    public_exponent= db.Column(db.String(512), nullable=False)
+    public_exponent= db.Column(db.String(), nullable=False)
 
     def __init__(self,public_modulus, public_exponent, private_exponent):
         """

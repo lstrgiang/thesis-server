@@ -22,15 +22,15 @@ class TestEncryption(BaseTestCase):
             str(client_key.e)],encrypted_key)
         self.assertEqual(key, KeyOperation.decrypt(client_key,new_key))
 
-    def test_encrypt_OTP(self):
-        """ Test for OTP code generation and encryption """
-        device, private_key= DatabasePrepare.add_new_device()
-        code = KeyOperation.encrypt_OTP(device)
-        rsa_key=PKCS1_OAEP.new(private_key)
-        de_code = rsa_key.decrypt(code)
-        self.assertTrue(isinstance(code,bytes))
-        self.assertTrue(isinstance(de_code,bytes))
-        self.assertTrue(OTP.verify(app.config['SECRET_KEY'], int(de_code)))
+    # def test_encrypt_OTP(self):
+        # """ Test for OTP code generation and encryption """
+        # device, private_key= DatabasePrepare.add_new_device()
+        # code = KeyOperation.encrypt_OTP(device)
+        # rsa_key=PKCS1_OAEP.new(private_key)
+        # de_code = rsa_key.decrypt(code)
+        # self.assertTrue(isinstance(code,bytes))
+        # self.assertTrue(isinstance(de_code,bytes))
+        # self.assertTrue(OTP.verify(app.config['SECRET_KEY'], int(de_code)))
     def test_generate_key_pair(self):
         """ Test for key pairs generation """
         private_key= KeyOperation.generate_new_pair()

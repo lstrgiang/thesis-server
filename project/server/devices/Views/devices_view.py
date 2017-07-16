@@ -43,10 +43,6 @@ class RequestAuthorizeAPI(MethodView):
                 'Please provide your MAC address',
                 status.HTTP_412_PRECONDITION_FAILED)
         #check if key is valid
-        if KeyOperation.is_valid(key)!= True:
-            return CommonResponseObject.fail_response(
-                'Please provide a valid public key',
-                status.HTTP_412_PRECONDITION_FAILED)
         if not RSAPair.is_key_exists(key):#check if key is existed
             return CommonResponseObject.response(
                 'Some errors occured, provided key does not exists')
@@ -63,7 +59,7 @@ class RequestAuthorizeAPI(MethodView):
                 'Your device is already authorized',
                 status.HTTP_202_ACCEPTED)
         return user, key
-    def __process_new_key(self,user_id, modulus, exponent, key_mod, key_exp):
+    def __process_new_key(self,user_id, key, key_mod, key_exp):
         """
         Process key passing down to the new authorized device with
         provided key from the root device and encrypt the key with
@@ -73,7 +69,7 @@ class RequestAuthorizeAPI(MethodView):
         if not device: #if root device does not exist
             return CommonResponseObject.fail_response(
                 'Some errors occured, please try again')
-        encrypted_key = KeyOperation.re_encryption([modulus, exponent],
+        encrypted_key = KeyOperation.re_encryption(key,
             [key_mod,key_exp], device.encrypted_key)
         if not encrypted_key:
             return CommonResponseObject.fail_response(
@@ -100,7 +96,7 @@ class RequestAuthorizeAPI(MethodView):
             code = post_data.get('code') #Get authorized code
             key_mod = post_data.get('modulus') #Get public key from the body
             key_ex = post_data.get('exponent') #Check the provided params, return user_id if qualified
-            user, key_id= self.__check_for_require_params(auth_token,mac_address,key_mod,key_ex)
+            user, key= self.__check_for_require_params(auth_token,mac_address,key_mod,key_ex)
             #If returned result is not an integer
             if not isinstance(user,User):
                 return user
@@ -108,12 +104,7 @@ class RequestAuthorizeAPI(MethodView):
             if OTP.verify(user,code)!=True:
                 return CommonResponseObject.fail_response('Invalid code.',
                     status.HTTP_401_UNAUTHORIZED)
-
-            if self.__process_new_key(user, key_mod, key_ex) != True:
-                return CommonResponseObject.fail_response(
-                    'Some errors occured, please try again')
-            return CommonResponseObject.success_resp_with_mess(
-                message='The request is stored successfully')
+            return self.__process_new_key(user.id, key, key_mod, key_ex)
         except Exception:
             return CommonResponseObject.fail_response(
                 'Missing important fields or values')
@@ -150,7 +141,7 @@ class RequestOTPAPI(MethodView):
         if not user:#if user is not available
             return CommonResponseObject.unauthorized_token_response()
         return user
-    def __store_temporary_key(self, user_id, mac_address,encrypted_key):
+    def __generate_encrypted_OTP(self, user_id, mac_address,encrypted_key):
         """
         Store the received key in the database associate with the root
         device for later re-encryption with support authorization
@@ -170,9 +161,7 @@ class RequestOTPAPI(MethodView):
         if device.mac_address != mac_address: #check if the access mac_address is the root device
             return CommonResponseObject.fail_response(
                 'Please request for authorization with your root device',
-                status.HTTP_505_PERMISSION_DENIED)
-        device.encrypted_key = encrypted_key #store encrypted key
-        db.session.commit() #store into database
+                status.HTTP_403_FORBIDDEN)
         encrypted_code=  KeyOperation.encrypt_OTP() #generate encrypted code
         return json.dumps(dict(code=encrypted_code)) #jsonize and return
     def post(self):
@@ -193,6 +182,6 @@ class RequestOTPAPI(MethodView):
             encrypted_key) # Check if the params satisfy the requirements
         if not isinstance(user,User):
             return user
-        return self.__store_temporary_key(user.id, mac_address, encrypted_key)
+        return self.__generate_encrypted_OTP(user.id, mac_address, encrypted_key)
 
 

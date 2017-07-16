@@ -22,25 +22,25 @@ class TestKeysInDeviceBluePrint(BaseTestCase):
         encrypted_modulus =base64.b64encode(cipher.encrypt(modulus))
         return encrypted_exponent.decode('utf-8'), encrypted_modulus.decode('utf-8')
 
-    def test_valid_register_root_device(self):
-        """
-        Register root device: Valid test case
-        """
-        with self.client:
-            DatabasePrepare.create_new_user()
-            token = PostHTTP.login_success(self.client)
-            private_key= KeyOperation.generate_new_pair()
-            data = json.dumps(dict(
-                mac_address=DatabasePrepare.SUCCESS_MAC_ADDR,
-                os=DatabasePrepare.SUCCESS_OS,
-                backup_key='backup_key',
-                otp_modulus=str(private_key.n),
-                otp_exponent=int(private_key.e),
-                main_key='main_key'))
-            response = PostHTTP.post_with_token(self.client,
-                    '/key/root',token.data.decode(),
-                    data)
-            data = json.loads(response.data.decode())
-            self.assertEqual(data['status'],'success')
+    # def test_valid_register_root_device(self):
+        # """
+        # Register root device: Valid test case
+        # """
+        # with self.client:
+            # DatabasePrepare.create_new_user()
+            # token = PostHTTP.login_success(self.client)
+            # private_key= KeyOperation.generate_new_pair()
+            # data = json.dumps(dict(
+                # mac_address=DatabasePrepare.SUCCESS_MAC_ADDR,
+                # os=DatabasePrepare.SUCCESS_OS,
+                # backup_key='backup_key',
+                # otp_modulus=str(private_key.n),
+                # otp_exponent=int(private_key.e),
+                # main_key='main_key'))
+            # response = PostHTTP.post_with_token(self.client,
+                    # '/key/root',token.data.decode(),
+                    # data)
+            # data = json.loads(response.data.decode())
+            # self.assertEqual(data['status'],'success')
 if __name__ == '__main__':
     unittest.main()

@@ -1,9 +1,11 @@
-from flask import Blueprint, request
+from flask import Blueprint, request,  url_for
 from flask.views import MethodView
 from flask_api import status
 from project.server import bcrypt, db
 from project.server.models import User, BlacklistToken, DeviceList
-from project.server.helper import CommonResponseObject, RequestUtils,DatabaseCheck
+from project.server.helper import CommonResponseObject, RequestUtils
+from project.server.helper import ConfirmationToken
+from project.server.helper import DatabaseCheck, Mail
 import datetime
 auth_blueprint = Blueprint('auth', __name__)
 
@@ -32,7 +34,7 @@ class RegisterAPI(MethodView):
         post_data = request.get_json()
         if post_data is None:
             return CommonResponseObject.fail_response(
-                'Please provide required data',status.HTTP_505_PERMISSION_DENIED)
+                'Please provide required data',status.HTTP_403_FORBIDDEN)
         self.__check_register_json_data(post_data)
         # check if user already exists
         user = User.get_user_by_email(post_data.get('email'))
@@ -53,10 +55,15 @@ class RegisterAPI(MethodView):
             # insert the user
             db.session.add(user)
             db.session.commit()
+            token = ConfirmationToken.generate_confirmation_token(user.email)
+            confirm_url = url_for('auth.confirm_api', token=token, _external=True)
+            html = "<p>Welcome! Thanks for signing up. Please follow this link to activate your account:</p><p><a href="+confirm_url+">{{ Activate}}</a></p><br><p>Cheers!</p>"
+            subject = "Scloud Service Email Confirmation"
+            Mail.send(user.email, subject, html)
             # generate the auth token
-            auth_token = User.encode_auth_token(user.id)
             # return response with auth token
-            return CommonResponseObject.register_success(auth_token)
+            return CommonResponseObject.success_resp_with_mess(
+                'Register succesfully, please confirm your email which is sent to your email address')
         except Exception as e:
             # database exception, cannot store user information
             print(e)
@@ -70,10 +77,14 @@ class LoginAPI(MethodView):
         post_data = request.get_json()
         if post_data is None:
             return CommonResponseObject.fail_response(
-                'Please provide required data',status.HTTP_505_PERMISSION_DENIED)
+                'Please provide required data',status.HTTP_404_NOT_FOUND)
         try:
             # fetch the user data
             user = User.get_user_by_email(post_data.get('email'))
+            if user and not user.is_confirmed:
+                return CommonResponseObject.fail_response(
+                'Please confirm your email address which is sent to your email',
+                status.HTTP_403_FORBIDDEN)
             mac= post_data.get('mac_address')
             if user and bcrypt.check_password_hash(user.password, post_data.get('password')):
                 device = DeviceList.get_device_by_user_id_and_mac(user.id,mac)
@@ -103,6 +114,7 @@ class LogoutAPI(MethodView):
                     # insert the token
                     db.session.add(blacklist_token)
                     db.session.commit()
+                    DatabaseCheck.remove_key_pair(auth_token)
                     return CommonResponseObject.logout_success()
                 except Exception as e:
                     return CommonResponseObject.logout_exception(e)
@@ -132,10 +144,35 @@ def BackupKeyAPI(MethodView):
         # TODO: implement the storing backup key mechanism
         return None
 
+class ConfirmAPI(MethodView):
+    """
+    API is used for confirmation
+    """
+    def get(self, token):
+        try:
+            email = ConfirmationToken.confirm_token(token)
+        except:
+            return CommonResponseObject.fail_response(
+                'The token is invalid or expired',
+                status.HTTP_404_NOT_FOUND)
+        user = User.query.filter_by(email=email).first_or_404()
+        if user.is_confirmed:
+            return CommonResponseObject.fail_response(
+                'The user is confirmed, please login',
+                status.HTTP_202_ACCEPTED)
+        user.is_confirmed = True
+        db.session.add(user)
+        db.session.commit()
+        return CommonResponseObject.success_resp_with_mess(
+            'The user is successfully confirmed')
+
+
+
 registration_view = RegisterAPI.as_view('register_api')
 login_view = LoginAPI.as_view('login_api')
 logout_view = LogoutAPI.as_view('logout_api')
 status_view = TokenStatusAPI.as_view('status_api')
+confirm_view = ConfirmAPI.as_view('confirm_api')
 # key_view = EncryptedKeyAPI.as_view('key_api')
 
 # add Rules for API Endpoints
@@ -158,4 +195,9 @@ auth_blueprint.add_url_rule(
     '/auth/status',
     view_func=status_view,
     methods=['POST']
+)
+auth_blueprint.add_url_rule(
+    '/auth/confirm/<string:token>',
+    view_func = confirm_view,
+    methods=['GET']
 )

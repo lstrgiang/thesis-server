@@ -1,12 +1,46 @@
-from flask import  make_response, jsonify
+from flask import  make_response, jsonify, copy_current_request_context
 from flask_api import status
 from project.server import app
+from flask_mail import Message
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, AES
-from project.server import db
+from project.server import db, mail
 from project.server.models import DeviceList, User, RSAPair
-import pyotp,base64, hashlib, os, ast
+from itsdangerous import URLSafeTimedSerializer
+import pyotp,base64, hashlib, os, ast, threading
+class ConfirmationToken:
+    @staticmethod
+    def generate_confirmation_token(email):
+        serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+        return serializer.dumps(email, salt=app.config['SECURITY_PASSWORD_SALT'])
+
+    @staticmethod
+    def confirm_token(token, expiration=3600):
+        serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+        try:
+            email = serializer.loads(
+                token,
+                salt=app.config['SECURITY_PASSWORD_SALT'],
+                max_age=expiration
+            )
+        except:
+            return False
+        return email
+class Mail:
+    @staticmethod
+    def send(receiver, subject, template):
+        mess = Message(subject, recipients=[receiver],
+                html=template,sender = app.config['MAIL_DEFAULT_SENDER'])
+        Mail.send_async(mess)
+    @staticmethod
+    def send_async(mess):
+        @copy_current_request_context
+        def send_message(mess):
+            mail.send(mess)
+        sender = threading.Thread(name='mail_sender', target=send_message, args=(mess,))
+        sender.start()
+
 class OTP:
     @staticmethod
     def get_new_code(secret):
@@ -17,7 +51,9 @@ class OTP:
         valid_window = 2 by default (2*30s = 60s = 1mins)
         """
         totp = pyotp.TOTP(base64.b32encode(secret.encode('ascii')))
-        return totp.verify(code,valid_window=2)
+        return totp.verify(code,valid_window=5)
+    # need to store new encrypted key as new device and generate
+    # backup key that is sent back to the user email
 
 
 class DatabaseCheck:
@@ -45,6 +81,15 @@ class DatabaseCheck:
         if device_list :
             return True
         return False
+    @staticmethod
+    def remove_key_pair(auth_token):
+        modulus, exponent= User.decode_public_key(auth_token)
+        key = RSAPair.get_RSA_by_public(modulus)
+        if not key:
+            return
+        db.session.delete(key)
+        db.session.commit()
+
     @staticmethod
     def prepare_auth_token(user_id,mac_address,main_key=None):
         """
@@ -194,6 +239,19 @@ class KeyOperation:
         return KeyOperation.encrypt(client_public,
                 KeyOperation.decrypt(server_private,encrypted_key))
     @staticmethod
+    def simple_encrypt(exponent, modulus, raw):
+        encrypted = ""
+        for char in list(raw):
+            encrypted+=pow(char,exponent,modulus)+":"
+        return encrypted[:-1]
+
+    @staticmethod
+    def simple_decrypt(exponent, modulus, encrypted):
+        decrypted = ""
+        for char in encrypted.split(':'):
+            decrypted+=chr(pow(char,exponent,modulus))
+        return decrypted
+    @staticmethod
     def encrypt(public_key, raw):
         """
         Perform encryption with provided public_key and raw data
@@ -275,12 +333,8 @@ class KeyOperation:
         """
         otp_modulus = device.otp_modulus #get the modulus of the public key
         otp_exponent = device.otp_exponent #get the exponent of the public key
-        #construct public key from retrieved e,n
-        public_key = KeyOperation.construct_key(int(otp_modulus),int(otp_exponent))
-        #Generate an OTP code with the secret key
         code= OTP.get_new_code(app.config['SECRET_KEY'])
-        rsa_key = PKCS1_OAEP.new(public_key)#create cipher from the public key
-        encrypted_key = rsa_key.encrypt(code.encode())#encrypt the code with the cipher
+        encrypted_key = pow(int(code),int(otp_exponent),int(otp_modulus))
         return encrypted_key #return the key
 
     @staticmethod

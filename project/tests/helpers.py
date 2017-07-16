@@ -74,6 +74,7 @@ class DatabasePrepare:
             birthday=DatabasePrepare.SUCCESS_BIRTHDAY
 
         ))
+
     @staticmethod
     def testing_json_data_with_mac():
         return json.dumps(dict(
@@ -103,8 +104,9 @@ class DatabasePrepare:
                 fullname=DatabasePrepare.SUCCESS_FULLNAME
         )
     @staticmethod
-    def create_new_user():
+    def create_new_user(confirmed=True):
         user = DatabasePrepare.sample_user()
+        user.is_confirmed=confirmed
         db.session.add(user)
         db.session.commit()
         return user

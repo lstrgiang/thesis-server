@@ -10,13 +10,14 @@ class User(db.Model):
     __tablename__ = "user"
 
     id = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    email = db.Column(db.String(255), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(), unique=True, nullable=False)
+    password = db.Column(db.String(), nullable=False)
     bday = db.Column(db.DateTime(), nullable=False)
-    fullname = db.Column(db.String(255), nullable=False)
-    job = db.Column(db.String(255), nullable=True)
-    country = db.Column(db.String(255), nullable=True)
+    fullname = db.Column(db.String(), nullable=False)
+    job = db.Column(db.String(), nullable=True)
+    country = db.Column(db.String(), nullable=True)
     registered_on = db.Column(db.DateTime, nullable=False)
+    is_confirmed= db.Column(db.Boolean, nullable=True, default=False)
     device_list = db.relationship('DeviceList', backref='user',lazy='dynamic')
     def __init__(self, email, password, bday, fullname,
             job=None, country=None):
@@ -59,6 +60,14 @@ class User(db.Model):
             )
         except Exception as e:
             return e
+    @staticmethod
+    def decode_public_key(auth_token):
+        try:
+            payload = jwt.decode(auth_token, app.config.get('SECRET_KEY'))
+            return payload['modulus'], payload['exponent']
+        except:
+            return 'Invalid auth token'
+    @staticmethod
     def decode_auth_token_key(auth_token):
         try:
             payload = jwt.decode(auth_token, app.config.get('SECRET_KEY'))
@@ -66,7 +75,8 @@ class User(db.Model):
             if is_blacklisted_token:
                 return 'Token is blacklisted. Please login again.'
             else:
-                return payload['sub'], [payload['modulus'], payload['exponent']]
+                key = [payload['modulus'], payload['exponent']]
+                return payload['sub'], key
         except jwt.ExpiredSignatureError:
             return 'Signature expired. Please login again.'
         except jwt.InvalidTokenError:
@@ -107,13 +117,13 @@ class DeviceList(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     registered_on = db.Column(db.DateTime, nullable=False)
     mac_address = db.Column(db.String(17), nullable=False)
-    os = db.Column(db.String(255), nullable=False)
-    is_root = db.Column(db.String(255), nullable=False)
-    main_key = db.Column(db.String(255), nullable=False)
-    backup_key = db.Column(db.String(255), nullable=False)
-    otp_modulus = db.Column(db.String(500), nullable=False)
+    os = db.Column(db.String(), nullable=False)
+    is_root = db.Column(db.String(), nullable=False)
+    main_key = db.Column(db.String(), nullable=False)
+    backup_key = db.Column(db.String(), nullable=False)
+    otp_modulus = db.Column(db.String(), nullable=False)
     otp_exponent = db.Column(db.Integer, nullable=False)
-    encrypted_key = db.Column(db.String(255), nullable=True)
+    encrypted_key = db.Column(db.String(), nullable=True)
 
     def serialize(self):
         return {
@@ -122,8 +132,8 @@ class DeviceList(db.Model):
             'os': self.os,
             'registered_on': self.registered_on
         }
-    def __init__(self, user, mac_address, os,backup_key,
-            main_key, otp_modulus, otp_exponent,is_root=False):
+    def __init__(self, user, mac_address, backup_key,
+            main_key, otp_modulus, otp_exponent,os="Unknown",is_root=False):
         self.user = user
         self.backup_key =backup_key
         self.registered_on = datetime.datetime.now()
@@ -131,7 +141,7 @@ class DeviceList(db.Model):
         self.otp_modulus=otp_modulus
         self.otp_exponent=otp_exponent
         self.mac_address=mac_address
-        self.os = os
+        self.os=os
         self.is_root=is_root
         self.encrypted_key = None
 
@@ -160,7 +170,7 @@ class RSAPair(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     public_modulus= db.Column(db.String(), nullable=False)
     public_exponent= db.Column(db.Integer, nullable=False)
-    public_exponent= db.Column(db.String(), nullable=False)
+    private_exponent = db.Column(db.String(), nullable=False)
 
     def __init__(self,public_modulus, public_exponent, private_exponent):
         """
@@ -197,6 +207,10 @@ class RSAPair(db.Model):
         """
         if isinstance(public_key, list):
             return RSAPair.query.filter_by(public_modulus=public_key[0]).first()
+        elif isinstance(public_key, str):
+            return RSAPair.query.filter_by(public_modulus=public_key).first()
+        elif isinstance(public_key, int):
+            return RSAPair.query.filter_by(public_modulus=str(public_key)).first()
         else:
             return RSAPair.query.filter_by(public_modulus=str(public_key.n)).first()
 

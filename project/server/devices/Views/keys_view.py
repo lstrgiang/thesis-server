@@ -48,10 +48,6 @@ class KeyAPI(MethodView):
             return CommonResponseObject.fail_response(
                 'Please provide your Mac address',
                 status.HTTP_412_PRECONDITION_FAILED)
-        if KeyOperation.is_valid([int(otp_modulus),int(otp_exponent)])!= True:
-            return CommonResponseObject.fail_response(
-                'Please provide a valid public key',
-                status.HTTP_412_PRECONDITION_FAILED)
         user = User.get_user_by_id(user_id)
         if not user:
             return CommonResponseObject.unauthorized_token_response()
@@ -69,7 +65,7 @@ class KeyAPI(MethodView):
         #Get post data
         post_data = request.get_json()
         mac_address =post_data.get('mac_address')
-        os = post_data.get('os')
+        os = post_data.get('os') or "Unknown"
         backup_key = post_data.get('backup_key')
         otp_modulus = post_data.get('otp_modulus')
         otp_exponent = post_data.get('otp_exponent')
@@ -85,11 +81,11 @@ class KeyAPI(MethodView):
                 status.HTTP_202_ACCEPTED)
         device = DeviceList(user,
                 mac_address=mac_address,
-                os=os,
                 main_key=main_key,
                 backup_key=backup_key,
                 otp_modulus=otp_modulus,
                 otp_exponent=otp_exponent,
+                os=os,
                 is_root=True)
         try:
             db.session.add(device)

@@ -189,5 +189,97 @@ class RequestOTPAPI(MethodView):
         if not isinstance(user,User):
             return user
         return self.__generate_encrypted_OTP(user.id, mac_address, encrypted_key)
-
-
+class DeauthorizeByRootAPI(MethodView):
+    def post(self):
+        post_data = request.get_json()
+        root_mac_address = post_data.get('root_mac_address')
+        mac_address = post_data.get('mac_address')
+        if not post_data or not mac_address or not root_mac_address:
+            return CommonResponseObject.fail_response(
+                'Please provide your mac_address and the mac_address of device for deauthorization',
+                status.HTTP_412_PRECONDITION_FAILED)
+        auth_token = RequestUtils.get_access_token(request)
+        user_id = User.decode_auth_token(auth_token)
+        device = DeviceList.get_device_by_user_id_and_mac(user_id,mac_address)
+        if not device:
+            return CommonResponseObject.fail_response(
+                'Your provided mac_address is unathorized',
+                status.HTTP_401_UNAUTHORIZED)
+        root_device = DeviceList.get_device_by_user_id_and_mac(user_id,root_mac_address)
+        if not root_device:
+            return CommonResponseObject.fail_response(
+                'Your provided mac address of root device is invalid',
+                status.HTTP_404_NOT_FOUND)
+        if not root_device.root:
+            return CommonResponseObject.fail_response(
+                'Your provided mac address of root device is unauthorized',
+                status.HTTP_401_UNAUTHORIZED)
+        try:
+            db.session.delete(device)
+            db.session.commit()
+            return CommonResponseObject.success_resp_with_mess(
+                'Your device is no longer authorized')
+        except Exception:
+            return CommonResponseObject.fail_response(
+                'Some errors occurred')
+class DeauthorizeAPI(MethodView):
+    def post(self):
+        post_data = request.get_json()
+        if not post_data or not post_data.get('mac_address'):
+            return CommonResponseObject.fail_response(
+                'Please provide your mac_address for deauthorization',
+                status.HTTP_412_PRECONDITION_FAILED)
+        auth_token = RequestUtils.get_access_token(request)
+        user_id = User.decode_auth_token(auth_token)
+        mac_address = post_data.get('mac_address')
+        device = DeviceList.get_device_by_user_id_and_mac(user_id, mac_address)
+        if not device:
+            return CommonResponseObject.fail_response(
+                'Invalid authentication token',status.HTTP_401_UNAUTHORIZED)
+        if device.root:
+            return CommonResponseObject.fail_response(
+                'You are not able to deauthorize without decoding your files to raw',
+                status.HTTP_403_FORBIDDEN)
+        try:
+            db.session.delete(device)
+            db.session.commit()
+            return CommonResponseObject.success_resp_with_mess(
+                'Your device is no longer authorized')
+        except Exception:
+            return CommonResponseObject.fail_response(
+                'Some errors occured, please try again')
+class ChangeRootAPI(MethodView):
+    def post(self):
+        post_data = request.get_json()
+        root_mac_address = post_data.get('root_mac_address')
+        mac_address = post_data.get('mac_address')
+        if not post_data or not mac_address or not root_mac_address:
+            return CommonResponseObject.fail_response(
+                'Please provide your mac_address and the mac_address of device for root changing',
+                status.HTTP_412_PRECONDITION_FAILED)
+        auth_token = RequestUtils.get_access_token(request)
+        user_id = User.decode_auth_token(auth_token)
+        device = DeviceList.get_device_by_user_id_and_mac(user_id,mac_address)
+        if not device:
+            return CommonResponseObject.fail_response(
+                'Your provided mac_address is unathorized',
+                status.HTTP_401_UNAUTHORIZED)
+        root_device = DeviceList.get_device_by_user_id_and_mac(user_id,root_mac_address)
+        if not root_device:
+            return CommonResponseObject.fail_response(
+                'Your provided mac address of root device is invalid',
+                status.HTTP_404_NOT_FOUND)
+        if not root_device.root:
+            return CommonResponseObject.fail_response(
+                'Your provided mac address of root device is unauthorized',
+                status.HTTP_401_UNAUTHORIZED)
+        try:
+            device.root = True
+            root_device.root = False
+            db.session.save()
+            db.session.commit()
+            return CommonResponseObject.success_resp_with_mess(
+                'Your root device is changed successfully')
+        except Exception:
+            return CommonResponseObject.fail_response(
+                'Some errors occurred')

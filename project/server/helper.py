@@ -127,6 +127,9 @@ class RequestUtils:
         return False
 class CommonResponseObject:
     @staticmethod
+    def response(responseObject, code):
+        return make_response(jsonify(responseObject)), code
+    @staticmethod
     def success_response(data, success_code=status.HTTP_200_OK):
         """
         Return success response

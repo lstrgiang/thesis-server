@@ -18,8 +18,8 @@ class BaseConfig:
     MAIL_PORT = 465
     MAIL_USE_TLS = False
     MAIL_USE_SSL = True
-    MAIL_USERNAME = os.environ['APP_MAIL_USERNAME']
-    MAIL_PASSWORD = os.environ['APP_MAIL_PASSWORD']
+    MAIL_USERNAME = os.getenv('APP_MAIL_USERNAME','scloud.service.mail@gmail.com')
+    MAIL_PASSWORD = os.getenv('APP_MAIL_PASSWORD','thesis2017')
 
     # mail accounts
     MAIL_DEFAULT_SENDER = MAIL_USERNAME
@@ -40,7 +40,8 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     """Production configuration."""
+    SECRET_KEY = 'my_precious'
     DEBUG = False
-    # SQLALCHEMY_DATABASE_URI = postgres_local_base + database_name
-    SQLALCHEMY_DATABASE_URI = os.environ['DATABASE_URL']
+    SQLALCHEMY_DATABASE_URI = postgres_local_base + database_name
+    # SQLALCHEMY_DATABASE_URI = os.environ['DATABASE_URL']
 

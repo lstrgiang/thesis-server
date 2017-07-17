@@ -9,25 +9,92 @@ from project.server.helper import DatabaseCheck, Mail
 import datetime
 auth_blueprint = Blueprint('auth', __name__)
 
+class ProfileAPI(MethodView):
+    """
+    User Information updating API
+    """
+    def get(self):
+        """
+        User Information retrieval API
+        """
+        auth_token =  RequestUtils.get_access_token(request)
+        user_id = User.decode_auth_token(auth_token)
+        user = User.query.filter_by(id=user_id).first()
+        if not user:
+            return CommonResponseObject.fail_response(
+                'User does not exist, please try again',
+                status.HTTP_404_NOT_FOUND)
+        responseObject={
+            'status': 'success',
+            'birthday': user.birthday,
+            'fullname': user.fullname,
+            'job': user.job,
+            'country': user.country
+        }
+        return CommonResponseObject.response(responseObject,
+            status.HTTP_200_OK)
 
+    def post(self):
+        post_data= request.json()
+        if post_data is None:
+            return CommonResponseObject.fail_response(
+                'Please provde required data', status.HTTP_403_FORBIDDEN)
+        auth_token = RequestUtils.get_access_token(request) #Return authentication token
+        user_id = User.decode_auth_token(auth_token)
+        user = User.query.filter_by(id=user_id).first()
+        if not user:
+            return CommonResponseObject.fail_response(
+                'User does not exist, please try again',
+                status.HTTP_404_NOT_FOUND)
+        isChanged= False
+        password = post_data.get('password')
+        if password:
+            user.password = password
+            isChanged=True
+        bday = post_data.get('birthday')
+        if bday:
+            isChanged = True
+            user.birthday =  datetime.datetime.strptime(bday,"%d/%m/%Y")
+        job = post_data.get('job')
+        if job:
+            user.job = job
+            isChanged = True
+        fullname=post_data.get('fullname')
+        if fullname:
+            user.fullname = fullname
+            isChanged = True
+        country = post_data.get('country')
+        if country:
+            user.country = country
+            isChanged = True
+        if isChanged:
+            db.session.save()
+            db.session.commit()
+        return CommonResponseObject.success_resp_with_mess(
+            'Your information is updated successfully')
 class RegisterAPI(MethodView):
     """
     User Registration Resource
     """
     def __check_register_json_data(self,post_data):#Check for json data
-        try:
-            email = post_data.get('email')
-            password = post_data.get('password')
-            bday = post_data.get('birthday')
-            post_data.get('job')
-            fullname=post_data.get('fullname')
-            post_data.get('country')
-            if not email or not password or not bday or not fullname:
-                return CommonResponseObject.fail_response(
-                    'Missing email, password, birthday or fullname')
-        except Exception:
+        email = post_data.get('email')
+        password = post_data.get('password')
+        bday = post_data.get('birthday')
+        job = post_data.get('job')
+        fullname=post_data.get('fullname')
+        country = post_data.get('country')
+        if not email or not password or not fullname:
             return CommonResponseObject.fail_response(
-                'JSON data missing required fields')
+                'Missing email, password, birthday or fullname')
+        user = User(
+            email=email,
+            password=password,
+            bday=datetime.datetime.strptime(bday,"%d/%m/%Y"),
+            job=job,
+            fullname=fullname,
+            country=country
+        )
+        return user
 
     def post(self):
         # get the post data
@@ -35,8 +102,6 @@ class RegisterAPI(MethodView):
         if post_data is None:
             return CommonResponseObject.fail_response(
                 'Please provide required data',status.HTTP_403_FORBIDDEN)
-        self.__check_register_json_data(post_data)
-        # check if user already exists
         user = User.get_user_by_email(post_data.get('email'))
         if user:
                 # return response to inform that user already existed
@@ -44,14 +109,9 @@ class RegisterAPI(MethodView):
         # if user does not exist, try to create new user and store to the database
             # initialize new user object with information from the request
         try:
-            user = User(
-                email=post_data.get('email'),
-                password=post_data.get('password'),
-                bday=datetime.datetime.strptime(post_data.get('birthday'),"%d/%m/%Y"),
-                job=post_data.get('job'),
-                fullname=post_data.get('fullname'),
-                country=post_data.get('country')
-            )
+            user = self.__check_register_json_data(post_data)
+            if not isinstance(user,User):
+                return user
             # insert the user
             db.session.add(user)
             db.session.commit()
@@ -85,10 +145,13 @@ class LoginAPI(MethodView):
                 return CommonResponseObject.fail_response(
                 'Please confirm your email address which is sent to your email',
                 status.HTTP_403_FORBIDDEN)
-            mac= post_data.get('mac_address')
-            if user and bcrypt.check_password_hash(user.password, post_data.get('password')):
-                device = DeviceList.get_device_by_user_id_and_mac(user.id,mac)
-                auth_token = DatabaseCheck.prepare_auth_token(user.id, mac ,
+            mac_address = post_data.get('mac_address')
+            if not mac_address:
+                return CommonResponseObject.fail_response(
+                'Please provide your MAC address', status.HTTP_412_PRECONDITION_FAILED)
+            if user and bcrypt.check_password_hash(user.password, post_data.get('password')) :
+                device = DeviceList.get_device_by_user_id_and_mac(user.id,mac_address)
+                auth_token = DatabaseCheck.prepare_auth_token(user.id, mac_address,
                         None if not device else device.main_key)
                 if auth_token:
                     return CommonResponseObject.login_success(auth_token)
@@ -173,6 +236,7 @@ login_view = LoginAPI.as_view('login_api')
 logout_view = LogoutAPI.as_view('logout_api')
 status_view = TokenStatusAPI.as_view('status_api')
 confirm_view = ConfirmAPI.as_view('confirm_api')
+profile_view = ProfileAPI.as_view('profile_api')
 # key_view = EncryptedKeyAPI.as_view('key_api')
 
 # add Rules for API Endpoints
@@ -200,4 +264,9 @@ auth_blueprint.add_url_rule(
     '/auth/confirm/<string:token>',
     view_func = confirm_view,
     methods=['GET']
+)
+auth_blueprint.add_url_rule(
+    '/auth/profile',
+    view_func = profile_view,
+    method=['GET,POST']
 )

@@ -3,7 +3,7 @@ from project.server import db
 from flask.views import MethodView
 from flask_api import status
 from project.server.models import User,DeviceList
-from project.server.helper import CommonResponseObject, KeyOperation, RequestUtils, DatabaseCheck
+from project.server.helper import CommonResponseObject,  RequestUtils, DatabaseCheck
 
 class KeyAPI(MethodView):
     """
@@ -70,13 +70,13 @@ class KeyAPI(MethodView):
         otp_modulus = post_data.get('otp_modulus')
         otp_exponent = post_data.get('otp_exponent')
         main_key = post_data.get('main_key')
-        root = post_data.get('root')
+        root = True if post_data.get('is_root').lower() == 'true' else False
         user= self.__check_for_require_params(auth_token,
                 mac_address,otp_modulus,otp_exponent, main_key, backup_key)
         if not isinstance(user,User):
             return user
         root_device = DeviceList.get_root_device(user.id)
-        if root_device:
+        if root_device and root:
             return CommonResponseObject.fail_response(
                 'The account already register a root device',
                 status.HTTP_202_ACCEPTED)
@@ -87,7 +87,7 @@ class KeyAPI(MethodView):
                 otp_modulus=otp_modulus,
                 otp_exponent=otp_exponent,
                 os=os,
-                is_root=True)
+                is_root=root)
         try:
             db.session.add(device)
             db.session.commit()

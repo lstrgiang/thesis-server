@@ -5,6 +5,8 @@ from flask_mail import Message
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Hash import SHA
+from Crypto.Cipher import PKCS1_v1_5
 from project.server import db, mail
 from project.server.models import DeviceList, User, RSAPair
 from itsdangerous import URLSafeTimedSerializer
@@ -43,10 +45,10 @@ class Mail:
 
 class OTP:
     @staticmethod
-    def get_new_code(secret):
+    def get_new_code(secret=app.config['SECRET_KEY']):
         return pyotp.TOTP(base64.b32encode(secret.encode('ascii'))).now()
     @staticmethod
-    def verify(secret, code):
+    def verify(code,secret=app.config['SECRET_KEY']):
         """
         valid_window = 2 by default (2*30s = 60s = 1mins)
         """
@@ -104,16 +106,14 @@ class DatabaseCheck:
             private_key = KeyOperation.generate_new_pair()
             if not RSAPair.is_existed(private_key):
                 break
-        public_key = private_key.publickey()
         auth_token = User.encode_auth_token(user_id,
-            int(public_key.e),int(public_key.n),main_key)
+            str(private_key.n),str(private_key.e),main_key)
         DatabaseCheck.store_new_key_pairs(private_key)
         return auth_token
     @staticmethod
     def store_new_key_pairs(private_key):
-        public_key = private_key.publickey()
-        key = RSAPair(str(public_key.n), int(public_key.e),
-            str(private_key.n))
+        key = RSAPair(str(private_key.n), int(private_key.e),
+            str(private_key.d))
         db.session.add(key)
         db.session.commit()
 
@@ -186,12 +186,13 @@ class CommonResponseObject:
         return CommonResponseObject.fail_response(
             message='User already exists. Please Log in.',
             error_code=status.HTTP_202_ACCEPTED)
-
     @staticmethod
-    def login_success(auth_token):
+    def login_success(auth_token, mess=None):
+        if mess is None:
+            mess= 'Successfully logged in.'
         responseObject = {
             'status': 'success',
-            'message': 'Successfully logged in.',
+            'message': mess,
             'auth_token': auth_token.decode()
         }
         return make_response(jsonify(responseObject)), status.HTTP_200_OK
@@ -221,28 +222,26 @@ class CommonResponseObject:
             error_code=status.HTTP_401_UNAUTHORIZED)
 class KeyOperation:
     @staticmethod
-    def re_encryption(server_key, client_key, encrypted_key):
+    def re_encryption(key, client_key, encrypted_key):
         """
         Perform decryption with server_key and encryption with client_key
         to return the encrypted_key to client
         :params:
-            :server_key: list of modulus and exponent of server key
+            :server_key: RSAPair object of the server key combination
             :client_key: list of modulus and exponent of client provided key
             :encrypted_key: provided key by the root device
         :returns: :new_encrypted_key:
         """
-        key = RSAPair.get_RSA_by_public(server_key)
         server_private = RSA.construct([int(key.public_modulus), int(key.public_exponent),
             int(key.private_exponent)])
-        client_public = RSA.construct([int(client_key[0]),
-            int(client_key[1])])
-        return KeyOperation.encrypt(client_public,
-                KeyOperation.decrypt(server_private,encrypted_key))
+        raw = KeyOperation.decrypt(server_private,encrypted_key)
+        return KeyOperation.simple_encrypt(client_key[0], client_key[1],raw)
     @staticmethod
-    def simple_encrypt(exponent, modulus, raw):
+    def simple_encrypt(modulus, exponent, raw):
+        modulus = int(modulus)
         encrypted = ""
         for char in list(raw):
-            encrypted+=pow(char,exponent,modulus)+":"
+            encrypted+=str(pow(ord(char),exponent,modulus))+":"
         return encrypted[:-1]
 
     @staticmethod
@@ -274,8 +273,11 @@ class KeyOperation:
             :encrypted: encrypted data
         :returns: :raw: raw data
         """
-        private_cipher = PKCS1_OAEP.new(private_key)
-        return private_cipher.decrypt(ast.literal_eval(str(encrypted))).decode()
+        dsize = SHA.digest_size
+        sentinel = Random.new().read(15+dsize)
+        cipher = PKCS1_v1_5.new(private_key)
+        print(private_key.n)
+        return cipher.decrypt(base64.b64decode(encrypted),sentinel).decode()
 
     @staticmethod
     def convert_to_32(data):

@@ -89,7 +89,7 @@ class LoginAPI(MethodView):
             if user and bcrypt.check_password_hash(user.password, post_data.get('password')):
                 device = DeviceList.get_device_by_user_id_and_mac(user.id,mac)
                 auth_token = DatabaseCheck.prepare_auth_token(user.id, mac ,
-                        None if not device else device.encrypted_key)
+                        None if not device else device.main_key)
                 if auth_token:
                     return CommonResponseObject.login_success(auth_token)
             else:

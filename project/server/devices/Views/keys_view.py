@@ -70,6 +70,7 @@ class KeyAPI(MethodView):
         otp_modulus = post_data.get('otp_modulus')
         otp_exponent = post_data.get('otp_exponent')
         main_key = post_data.get('main_key')
+        root = post_data.get('root')
         user= self.__check_for_require_params(auth_token,
                 mac_address,otp_modulus,otp_exponent, main_key, backup_key)
         if not isinstance(user,User):
@@ -90,7 +91,10 @@ class KeyAPI(MethodView):
         try:
             db.session.add(device)
             db.session.commit()
-            return CommonResponseObject.success_resp_with_mess(
+            modulus, exponent = User.decode_public_key(auth_token)
+            auth_token = User.encode_auth_token(user.id,str(modulus),
+                    str(exponent),main_key)
+            return CommonResponseObject.login_success(auth_token,
                     'You are able to encrypt your file now')
         except Exception as e:
             print(e)

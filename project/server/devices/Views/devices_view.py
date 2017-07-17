@@ -35,7 +35,7 @@ class RequestAuthorizeAPI(MethodView):
         if not auth_token:#check if auth_token is available
             return CommonResponseObject.unauthorized_token_response()
         #get user_id and key from the auth_token
-        user_id, key= User.decode_auth_token_key(auth_token)
+        user_id= User.decode_auth_token(auth_token)
         if isinstance(user_id,str):#check if user_id is valid
             return CommonResponseObject.unauthorized_token_response()
         if not isinstance(mac_address,str): #check if mac_address is valid
@@ -43,7 +43,9 @@ class RequestAuthorizeAPI(MethodView):
                 'Please provide your MAC address',
                 status.HTTP_412_PRECONDITION_FAILED)
         #check if key is valid
-        if not RSAPair.is_key_exists(key):#check if key is existed
+        modulus, exponent = User.decode_public_key(auth_token)
+        key = RSAPair.get_RSA_by_public(modulus)
+        if not key:#check if key is existed
             return CommonResponseObject.response(
                 'Some errors occured, provided key does not exists')
         user = User.get_user_by_id(user_id) #retrieve the user entity
@@ -58,7 +60,7 @@ class RequestAuthorizeAPI(MethodView):
             return CommonResponseObject.fail_response(
                 'Your device is already authorized',
                 status.HTTP_202_ACCEPTED)
-        return user, key
+        return user,key
     def __process_new_key(self,user_id, key, key_mod, key_exp):
         """
         Process key passing down to the new authorized device with
@@ -101,11 +103,12 @@ class RequestAuthorizeAPI(MethodView):
             if not isinstance(user,User):
                 return user
             #Return the exception message if it fail
-            if OTP.verify(user,code)!=True:
+            if OTP.verify(code)!=True:
                 return CommonResponseObject.fail_response('Invalid code.',
                     status.HTTP_401_UNAUTHORIZED)
             return self.__process_new_key(user.id, key, key_mod, key_ex)
-        except Exception:
+        except Exception as e:
+            print(e)
             return CommonResponseObject.fail_response(
                 'Missing important fields or values')
 class RequestOTPAPI(MethodView):
@@ -154,6 +157,7 @@ class RequestOTPAPI(MethodView):
             :Error Response: or :JSON object contains encrypted_code:
         """
         device = DeviceList.get_root_device(user_id)
+        print(user_id)
         if not device: #Check if root device is stored
             return CommonResponseObject.fail_response(
                 'Please register for the root device to process further encryption',
@@ -162,7 +166,9 @@ class RequestOTPAPI(MethodView):
             return CommonResponseObject.fail_response(
                 'Please request for authorization with your root device',
                 status.HTTP_403_FORBIDDEN)
-        encrypted_code=  KeyOperation.encrypt_OTP() #generate encrypted code
+        device.encrypted_key = encrypted_key
+        db.session.commit()
+        encrypted_code=  KeyOperation.encrypt_OTP(device) #generate encrypted code
         return json.dumps(dict(code=encrypted_code)) #jsonize and return
     def post(self):
         """

@@ -2,6 +2,7 @@ import datetime
 import jwt
 from sqlalchemy import and_
 from project.server import app, db, bcrypt
+from Crypto.PublicKey import RSA
 
 class User(db.Model):
     """
@@ -116,9 +117,9 @@ class DeviceList(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     registered_on = db.Column(db.DateTime, nullable=False)
-    mac_address = db.Column(db.String(17), nullable=False)
+    mac_address = db.Column(db.String(), nullable=False)
     os = db.Column(db.String(), nullable=False)
-    is_root = db.Column(db.String(), nullable=False)
+    root= db.Column(db.Boolean, nullable=True, default=False)
     main_key = db.Column(db.String(), nullable=False)
     backup_key = db.Column(db.String(), nullable=False)
     otp_modulus = db.Column(db.String(), nullable=False)
@@ -142,12 +143,12 @@ class DeviceList(db.Model):
         self.otp_exponent=otp_exponent
         self.mac_address=mac_address
         self.os=os
-        self.is_root=is_root
+        self.root=is_root
         self.encrypted_key = None
 
     @staticmethod
     def get_root_device(user_id):
-        return DeviceList.query.filter(and_(DeviceList.user.has(id=user_id),DeviceList.is_root is True)).first()
+        return DeviceList.query.filter(and_(DeviceList.user.has(id=user_id),DeviceList.root==True)).first()
     @staticmethod
     def get_device_by_user_id_and_mac(user_id,mac):
         return DeviceList.query.filter(and_(DeviceList.user.has(id=user_id),DeviceList.mac_address==mac)).first()
@@ -159,7 +160,7 @@ class DeviceList(db.Model):
         return DeviceList.query.filter(DeviceList.user.has(id=user_id))
     @staticmethod
     def is_root(mac):
-        return DeviceList.get_device_by_mac(mac).is_root
+        return DeviceList.get_device_by_mac(mac).root
 class RSAPair(db.Model):
     """
     RSAPair model for database mapping to create RSAPair table
@@ -183,7 +184,7 @@ class RSAPair(db.Model):
         """
         self.public_modulus = public_modulus
         self.public_exponent = public_exponent
-        self.private_exponent= private_exponent
+        self.private_exponent = private_exponent
 
     @staticmethod
     def is_existed(key):
@@ -192,9 +193,10 @@ class RSAPair(db.Model):
         :params: :key: list or RSA instance of the key
         :returns: True or False
         """
-        if isinstance(key,list):
+        if isinstance(key,str):
+            rsa_key = RSAPair.query.filter_by(public_modulus=key).first()
+        elif isinstance(key,list):
             rsa_key = RSAPair.query.filter_by(public_modulus=key[0]).first()
-            print(rsa_key)
         else:
             rsa_key = RSAPair.query.filter_by(public_modulus=str(key.n)).first()
         return True if rsa_key else False

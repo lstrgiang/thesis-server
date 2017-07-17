@@ -6,8 +6,19 @@ HOST: https://scloud-server.herokuapp.com/
 Polls is a simple API allowing consumers to view polls and vote in them.
 
 ## Registration API [/auth/register]
-Register new account with provided information and return authorized access token.
+
 ### Register API [POST]
+Register new account with provided information and return authorized access token.
+
++ Params:
+
+    + email (string) - The email of the user
+    + password (string) - the registered password of the user
+    + birthday (string - dd/mm/yyyy) - The birthday of the user (optional)
+    + fullname (string) - The user's fullname
+    + job (string) - The job of the user (optional)
+    + country (string) - The user's country
+    
 + Request (application/json)
 
         {
@@ -23,8 +34,7 @@ Register new account with provided information and return authorized access toke
 
         {
             "status": "success",
-            "message": "Successfully registered."
-            "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+            "message": "Successfully registered, please confirm your email."
         }
         
 + Response 401 (application/json)
@@ -42,8 +52,14 @@ Register new account with provided information and return authorized access toke
         }
 
 ## Login API [/auth/login]
-Login with created user account and return the authorized access token
 ### Login [POST]
+Login with created user account and return the authorized access token
+
++ Params:
+        
+    + email (string) - the registered email
+    + password (string) - the registered password
+    + mac_address (string) - the MAC address of the request device
 
 + Request (application/json)
 
@@ -59,6 +75,13 @@ Login with created user account and return the authorized access token
             "status": "success",
             "message": "Successfully login.",
             "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+        }
+
++ Response 403 (application/json)
+
+        {
+            "status": "fail",
+            "message":"Please confirm your email address which is sent to your email"
         }
         
 + Response 404 (application/json)
@@ -76,9 +99,20 @@ Login with created user account and return the authorized access token
         }
         
 ## Key Registration API [/key/root]
-Register the device as root and add new keys
 ### Key Register [POST]
+This API for register new key and device:
+    + First time root device: register for a fresh root devices
+    + Other unauthorize devices: register for another devices
+The API should be called with the main key that would be used for decrypting files.
++ Params:
 
+    + mac_address (string) - The mac address of the root device
+    + os (string) - The operating system of the root device (optional)
+    + backup_key (string) - Generated backup key from the root device
+    + modulus (string) - The big integer modulus of the root device
+    + exponent (big integer) - The public exponent of the root device (65537 by default)
+    + main_key (string) - The encrypted key for the main decryption of data
+    
 + Request (application/json)
     
     + Headers
@@ -95,6 +129,7 @@ Register the device as root and add new keys
                 "exponent": "adfasdfasdf123123",
                 "encrypted_modulus": "123123asdf123",
                 "encrypted_exponent": "asdfasdf123123"
+                "is_root":"True"
             }
 
 + Response 200 (application/json)
@@ -116,4 +151,100 @@ Register the device as root and add new keys
             {
                 "status": "fail",
                 "message":  "The account already registered a root device"
+            }
+            
+## Request For OTP Code [/auth/request-otp]
+### Request OTP API [POST]
+This API is only called by the root device, any other device will not be able to decode the OTP code.
+
++ Params:
+
+    + mac_address (string) - The MAC address of the device
+    + encrypted_key (string) - Encrypt the main key with provided public RSA key
+
++ Return:
+
+    + encrypted_code (big integer) - The encrypted OTP code that can only be decoded by the root device.
+        
++ Request (application/json)
+
+    + Headers
+        
+            Authorization: "Bearer  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+
+    + Body
+    
+            {
+                "mac_address": "2C:32:43:4D:21:5A",
+                "encrypted_key": "1425452435234:123542365234:3242342312312423$:234234234234",
+            }
+
++ Response 200 (application/json)
+
+            {
+                "code":"1231232154712384192341234"
+            }
+        
++ Response 402 (application/json)
+            
+            {
+                "status": "fail",
+                "message": "Please provide your MAC address"
+            }
+            
++ Response 402 (application/json)
+            
+            {
+                "status": "fail",
+                "message": "Please provide your encrypted key for authorization"
+            }
+            
++ Response 401 (application/json)
+
+
+            {
+                "status": "fail",
+                "meesage": "Please register for the root device to process further encryption"
+            }
+            
+            
+## Request For OTP Code Verification [/auth/request-authorize]
+### Request OTP Verification API [POST]
+This API will be called by unauthorized devices with provided OTP code for authorization.
+
++ Params:
+
+    + otp_code (integer) - The provided OTP code by the server
+
++ Return:
+
+    + encrypted_key (string) - The encrypted key of the device
+
++ Request (application/json)
+
+    + Headers
+    
+            Authorization: "Bearer  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOm51bGwsImlhdCI6MTQ5Nzc1NjgyOCwic3ViIjoxLCJleHAiOjE0OTc4NDMyMjh9.sFC_YVY47XMeA-Jw_StOfFxeZCvLbAFtnGwaH0udma4"
+
+    + Body
+    
+            {
+                "modulus":"41152522433320028391414260781121497823282123701983808635098754820396967694895340897354177567517177955359187927090779247132253",
+                "exponent":65537,
+                "code":"539091",
+                "mac_address":"12:13:14:00:00:00"
+            }
+            
++ Response 200 (application/json)
+
+            {
+                "key": "33834635045219947898252094668321498274919397565962335521961717926420405148030892650939535466412802616602157183804180045506502:38571129295399774904737794349789432023311245061436095451844959956405773153302846993796978500276051114272089162473138116939717:10832608334699818855828934747353772150334496808466396424627447406895967652602018996163610689189186405549986070539935551574901:24092247000085185935728261519413371024498220206836951524980514463752829231939329364004876223118606857970025466726618926447036:4330638504397153197922045025360642123402563104307075978719505058104569114213878482997330480102997988513620004153122483095895:10832608334699818855828934747353772150334496808466396424627447406895967652602018996163610689189186405549986070539935551574901:24092247000085185935728261519413371024498220206836951524980514463752829231939329364004876223118606857970025466726618926447036:4330638504397153197922045025360642123402563104307075978719505058104569114213878482997330480102997988513620004153122483095895:18393960016313092663471525843110906481486512423101022935587359911510881250716079167083290302210529923474971218537023721881798:38571129295399774904737794349789432023311245061436095451844959956405773153302846993796978500276051114272089162473138116939717:13792171668040240496142632215628803636799677848468601290039105705684630898174414036283964787422118360870674797974399320460775:4330638504397153197922045025360642123402563104307075978719505058104569114213878482997330480102997988513620004153122483095895:80053101667644820847944908859250895576026087311356409766681399833154215416961408619466310085608169792782469300732310988723:6686592030355204754035772297209150244897296284173540372536386712711491941034277941706473530329113467824915174731235122349958:10832608334699818855828934747353772150334496808466396424627447406895967652602018996163610689189186405549986070539935551574901:14534887848651698038991973945524929264763884546819470182154226743591735483484237357904738534428046649486840722146060043638750:4330638504397153197922045025360642123402563104307075978719505058104569114213878482997330480102997988513620004153122483095895:6870105255445075064555982116814082013545299091094677649753776022509563632985299606147590933071381787526006104950346943445477:13792171668040240496142632215628803636799677848468601290039105705684630898174414036283964787422118360870674797974399320460775:28483680233775986866744220930438172384246575830538122882007681261035643422406072111086382775505056527239451727685223173441913",
+                "status": "success"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "message":"",
+                "status":"fail"
             }

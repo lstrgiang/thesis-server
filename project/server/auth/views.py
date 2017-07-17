@@ -268,5 +268,5 @@ auth_blueprint.add_url_rule(
 auth_blueprint.add_url_rule(
     '/auth/profile',
     view_func = profile_view,
-    method=['GET,POST']
+    methods=['GET,POST']
 )

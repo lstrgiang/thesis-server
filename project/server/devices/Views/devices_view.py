@@ -38,7 +38,7 @@ class RequestAuthorizeAPI(MethodView):
         user_id= User.decode_auth_token(auth_token)
         if isinstance(user_id,str):#check if user_id is valid
             return CommonResponseObject.unauthorized_token_response()
-        if not isinstance(mac_address,str): #check if mac_address is valid
+        if not mac_address: #check if mac_address is valid
             return CommonResponseObject.fail_response(
                 'Please provide your MAC address',
                 status.HTTP_412_PRECONDITION_FAILED)

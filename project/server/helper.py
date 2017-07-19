@@ -93,7 +93,7 @@ class DatabaseCheck:
         db.session.commit()
 
     @staticmethod
-    def prepare_auth_token(user_id,mac_address,main_key=None):
+    def prepare_auth_token(user_id,mac_address,main_key=None, hasRoot = False):
         """
         Prepare params for generating authentication token
         :params:
@@ -106,8 +106,10 @@ class DatabaseCheck:
             private_key = KeyOperation.generate_new_pair()
             if not RSAPair.is_existed(private_key):
                 break
+        if main_key:
+            hasRoot = True
         auth_token = User.encode_auth_token(user_id,
-            str(private_key.n),str(private_key.e),main_key)
+            str(private_key.n),str(private_key.e),main_key, hasRoot)
         DatabaseCheck.store_new_key_pairs(private_key)
         return auth_token
     @staticmethod

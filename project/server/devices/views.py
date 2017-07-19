@@ -8,6 +8,12 @@ req_authorize_view = RequestAuthorizeAPI.as_view('req_authorize_api')
 req_otp_view = RequestOTPAPI.as_view('req_otp_api')
 deauthorize_view = DeauthorizeAPI.as_view('deauthorize_api')
 root_deauthorize_view = DeauthorizeByRootAPI.as_view('root_deauthorize_api')
+change_root_view = ChangeRootAPI.as_view('change_root_api')
+devices_blueprint.add_url_rule(
+    '/devices/root-alfter',
+    view_func = change_root_view,
+    methods = ['POST'],
+)
 devices_blueprint.add_url_rule(
     '/devices',
     view_func=devices_view,

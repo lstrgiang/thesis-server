@@ -151,8 +151,9 @@ class LoginAPI(MethodView):
                 'Please provide your MAC address', status.HTTP_412_PRECONDITION_FAILED)
             if user and bcrypt.check_password_hash(user.password, post_data.get('password')) :
                 device = DeviceList.get_device_by_user_id_and_mac(user.id,mac_address)
+                root = DeviceList.get_root_device(user.id)
                 auth_token = DatabaseCheck.prepare_auth_token(user.id, mac_address,
-                        None if not device else device.main_key)
+                        None if not device else device.main_key, True if root else False)
                 if auth_token:
                     return CommonResponseObject.login_success(auth_token)
             else:

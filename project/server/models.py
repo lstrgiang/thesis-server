@@ -39,20 +39,23 @@ class User(db.Model):
         return User.query.filter_by(id=user_id).first()
 
     @staticmethod
-    def encode_auth_token(user_id, modulus=None, exponent=None, main_key=None):
+    def encode_auth_token(user_id, modulus=None, exponent=None, main_key=None, hasRoot=False):
         """
         Generates the Auth Token
         :param user_id key:
         :return: string
         """
         try:
+            if main_key:
+                hasRoot = True
             payload = {
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1),
                 'iat': datetime.datetime.utcnow(),
                 'sub': user_id,
                 'modulus': modulus if modulus else "No modulus is available",
                 'exponent': exponent if exponent else "No exponent is available",
-                'key': main_key if main_key else "No main key is available"
+                'key': main_key if main_key else "No main key is available",
+                'hasRoot': hasRoot
             }
             return jwt.encode(
                     payload,

@@ -10,4 +10,4 @@ __pycache__
 *.coverage
 .DS_Store
 env.sh
-migrations
+config.py

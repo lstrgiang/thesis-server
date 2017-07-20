@@ -70,7 +70,7 @@ class KeyAPI(MethodView):
         otp_modulus = post_data.get('otp_modulus')
         otp_exponent = post_data.get('otp_exponent')
         main_key = post_data.get('main_key')
-        root = True if post_data.get('is_root').lower() == 'true' else False
+        root = post_data.get('is_root')
         user= self.__check_for_require_params(auth_token,
                 mac_address,otp_modulus,otp_exponent, main_key, backup_key)
         if not isinstance(user,User):

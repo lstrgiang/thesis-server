@@ -35,7 +35,7 @@ class ProfileAPI(MethodView):
             status.HTTP_200_OK)
 
     def post(self):
-        post_data= request.json()
+        post_data= request.get_json()
         if post_data is None:
             return CommonResponseObject.fail_response(
                 'Please provde required data', status.HTTP_403_FORBIDDEN)
